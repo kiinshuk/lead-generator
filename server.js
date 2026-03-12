@@ -132,7 +132,7 @@ function cleanLeads(leads) {
   );
 }
 
-async function searchBusiness(query, searchEngine = 'brave') {
+async function searchBusiness(query) {
   const urls = new Set();
   
   const headers = {
@@ -144,42 +144,55 @@ async function searchBusiness(query, searchEngine = 'brave') {
     'Cache-Control': 'max-age=0'
   };
 
-  const engineUrls = {
-    brave: `https://search.brave.com/search?q=${encodeURIComponent(query)}&num=30`,
-    bing: `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=30&setlang=en`
-  };
+  const engineConfigs = [
+    { name: 'bing', url: `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=30&setlang=en` },
+    { name: 'brave', url: `https://search.brave.com/search?q=${encodeURIComponent(query)}&num=30` }
+  ];
 
-  const urlToTry = engineUrls[searchEngine] || engineUrls.brave;
-  
-  try {
-    const res = await axios.get(urlToTry, { headers, timeout: 20000 });
-    
-    if (res.data.length < 2000) return Array.from(urls);
-    
-    const $ = cheerio.load(res.data);
-    
-    $('a').each((i, el) => {
-      const href = $(el).attr('href');
-      if (!href) return;
+  for (const engine of engineConfigs) {
+    try {
+      console.log(`Trying ${engine.name}...`);
+      const res = await axios.get(engine.url, { headers, timeout: 20000 });
       
-      let cleanUrl = href;
-      if (href.includes('/url?')) {
-        try {
-          const params = new URLSearchParams(href.split('?')[1]);
-          cleanUrl = params.get('url') || cleanUrl;
-        } catch {}
+      if (res.status === 429) {
+        console.log(`Rate limited on ${engine.name}, trying next...`);
+        await delay(3000);
+        continue;
       }
       
-      if (cleanUrl.startsWith('//')) cleanUrl = 'https:' + cleanUrl;
-      if (!cleanUrl.startsWith('http')) return;
+      if (res.data.length < 2000) continue;
       
-      const domain = extractDomain(cleanUrl);
-      if (domain && isValidDomain(domain)) {
-        urls.add(cleanUrl.split('&')[0].split('?')[0]);
+      const $ = cheerio.load(res.data);
+      
+      $('a').each((i, el) => {
+        const href = $(el).attr('href');
+        if (!href) return;
+        
+        let cleanUrl = href;
+        if (href.includes('/url?')) {
+          try {
+            const params = new URLSearchParams(href.split('?')[1]);
+            cleanUrl = params.get('url') || cleanUrl;
+          } catch {}
+        }
+        
+        if (cleanUrl.startsWith('//')) cleanUrl = 'https:' + cleanUrl;
+        if (!cleanUrl.startsWith('http')) return;
+        
+        const domain = extractDomain(cleanUrl);
+        if (domain && isValidDomain(domain)) {
+          urls.add(cleanUrl.split('&')[0].split('?')[0]);
+        }
+      });
+      
+      if (urls.size > 0) {
+        console.log(`Found ${urls.size} URLs from ${engine.name}`);
+        break;
       }
-    });
-  } catch (e) {
-    console.log(`Search error: ${e.message}`);
+    } catch (e) {
+      console.log(`${engine.name} error: ${e.message}`);
+      await delay(2000);
+    }
   }
 
   return Array.from(urls).slice(0, 50);
@@ -255,10 +268,10 @@ app.post('/generate-leads', async (req, res) => {
 
     const allUrls = new Set();
     for (const query of queries) {
-      const urls = await searchBusiness(query, searchEngine);
+      const urls = await searchBusiness(query);
       urls.forEach(url => allUrls.add(url));
-      await delay(2000);
-      if (allUrls.size >= numLeads * 4) break;
+      await delay(3000);
+      if (allUrls.size >= numLeads * 3) break;
     }
 
     console.log(`Found ${allUrls.size} URLs`);
