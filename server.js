@@ -2,18 +2,34 @@ const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const XLSX = require('xlsx');
+const dns = require('dns').promises;
 
 const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
-const SEARCH_SUFFIXES = ['importer', 'distributor', 'wholesale company', 'trader', 'supplier'];
-const CONTACT_PATHS = ['/contact', '/contact-us', '/about', '/company', '/'];
+const SEARCH_SUFFIXES = ['importer', 'distributor', 'wholesale', 'trader', 'supplier'];
+const CONTACT_PATHS = ['/contact', '/contact-us', '/about-us', '/about', '/company', '/'];
 
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-const PHONE_REGEX = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{2,4}[-.\s]?\d{2,4}[-.\s]?\d{2,6}/g;
+const PHONE_REGEX = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{2,4}[-.\s]?\d{2,4}/g;
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+const DISPOSABLE_DOMAINS = [
+  'tempmail.com', '10minutemail.com', 'guerrillamail.com', 'mailinator.com',
+  'throwaway.email', 'fakeinbox.com', 'trashmail.com', 'yopmail.com',
+  'getnada.com', 'mintemail.com', 'sharklasers.com', 'spam4.me'
+];
+
+const BLOCKED_DOMAINS = [
+  'google', 'facebook', 'youtube', 'twitter', 'linkedin', 'instagram',
+  'amazon', 'ebay', 'alibaba', 'alibaba.com', 'made-in-china',
+  'indiamart', 'tradeindia', 'exportersindia', 'tradekey',
+  'bing', 'yahoo', 'duckduckgo', 'yelp', 'yellowpages',
+  'pinterest', 'reddit', 'wikipedia', 'wordpress', 'blogspot',
+  'gov', 'edu', 'org', 'co.in', 'co.uk'
+];
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -22,9 +38,110 @@ function delay(ms) {
 function extractDomain(url) {
   try {
     const parsed = new URL(url);
-    return parsed.hostname.replace(/^www\./, '');
+    return parsed.hostname.replace(/^www\./, '').toLowerCase();
   } catch {
     return '';
+  }
+}
+
+function isValidDomain(domain) {
+  if (!domain) return false;
+  const lower = domain.toLowerCase();
+  return !BLOCKED_DOMAINS.some(b => lower.includes(b));
+}
+
+function isValidEmail(email) {
+  if (!email) return false;
+  const cleaned = email.toLowerCase().trim();
+  
+  const emailRegex = /^[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!emailRegex.test(cleaned)) return false;
+  
+  const parts = cleaned.split('@');
+  if (parts.length !== 2) return false;
+  
+  const domain = parts[1];
+  if (DISPOSABLE_DOMAINS.includes(domain)) return false;
+  if (domain.includes('example') || domain.includes('test') || domain.includes('localhost')) return false;
+  if (domain.length < 4) return false;
+  
+  const invalidPatterns = ['admin', 'support', 'noreply', 'no-reply', 'webmaster', 'postmaster'];
+  if (invalidPatterns.some(p => cleaned.startsWith(p + '@'))) return false;
+  
+  return true;
+}
+
+function isValidPhone(phone) {
+  if (!phone) return false;
+  
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 8 || digits.length > 12) return false;
+  
+  const invalidPatterns = ['000000', '111111', '222222', '333333', '444444', '555555', '666666', '777777', '888888', '999999', '123456', '987654'];
+  if (invalidPatterns.some(p => digits.includes(p))) return false;
+  
+  if (digits.match(/^(\d)\1{5,}$/)) return false;
+  
+  return true;
+}
+
+function cleanEmail(email) {
+  if (!isValidEmail(email)) return '';
+  return email.toLowerCase().trim();
+}
+
+function cleanPhone(phone) {
+  if (!isValidPhone(phone)) return '';
+  return phone.replace(/\s+/g, ' ').trim();
+}
+
+function cleanCompany(company) {
+  if (!company) return '';
+  const cleaned = company
+    .replace(/[^\w\s&'.-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  if (cleaned.length < 2 || cleaned.length > 80) return '';
+  if (cleaned.toLowerCase().includes('contact') || cleaned.toLowerCase().includes('about')) return '';
+  
+  return cleaned.slice(0, 80);
+}
+
+function cleanUrl(url) {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    if (!isValidDomain(parsed.hostname)) return '';
+    return parsed.href.replace(/\/$/, '').split('?')[0];
+  } catch {
+    return '';
+  }
+}
+
+async function validateUrl(url) {
+  const domain = extractDomain(url);
+  if (!domain || !isValidDomain(domain)) return false;
+  
+  try {
+    await dns.lookup(domain.replace('www.', ''));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function checkWebsite(url) {
+  try {
+    const res = await axios.get(url, {
+      headers: { 'User-Agent': USER_AGENT },
+      timeout: 8000,
+      maxRedirects: 3,
+      validateStatus: (status) => status < 500
+    });
+    return res.status === 200;
+  } catch {
+    return false;
   }
 }
 
@@ -38,43 +155,6 @@ function dedupeLeads(leads) {
   });
 }
 
-function cleanEmail(email) {
-  if (!email) return '';
-  const cleaned = email.toLowerCase().trim();
-  const invalidDomains = ['example.com', 'test.com', 'localhost', 'domain.com', 'sample.com'];
-  if (invalidDomains.some(d => cleaned.includes(d))) return '';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned)) return '';
-  return cleaned;
-}
-
-function cleanPhone(phone) {
-  if (!phone) return '';
-  const cleaned = phone.replace(/[^\d+]/g, '');
-  if (cleaned.length < 8 || cleaned.length > 15) return '';
-  const invalidPatterns = ['000000', '111111', '123456', '999999'];
-  if (invalidPatterns.some(p => cleaned.includes(p))) return '';
-  return phone.trim();
-}
-
-function cleanCompany(company) {
-  if (!company) return '';
-  return company
-    .replace(/[^\w\s&'-]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 100);
-}
-
-function cleanUrl(url) {
-  if (!url) return '';
-  try {
-    const parsed = new URL(url);
-    return parsed.href.replace(/\/$/, '');
-  } catch {
-    return url;
-  }
-}
-
 function cleanLeads(leads) {
   return leads.map(lead => ({
     Company: cleanCompany(lead.Company) || extractDomain(lead.Website),
@@ -84,153 +164,115 @@ function cleanLeads(leads) {
     Country: lead.Country,
     Product: lead.Product
   })).filter(lead => 
-    (lead.Email || lead.Phone) && lead.Website
+    lead.Website && (lead.Email || lead.Phone)
   );
 }
 
-async function searchGoogle(query, searchEngine = 'all') {
+async function searchBusiness(query, searchEngine = 'brave') {
   const urls = new Set();
   
-  const engineConfigs = {
-    brave: [`https://search.brave.com/search?q=${encodeURIComponent(query)}&num=50`],
-    bing: [`https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50&setlang=en`],
-    yahoo: [`https://search.yahoo.com/search?p=${encodeURIComponent(query)}&n=50`],
-    all: [
-      `https://search.brave.com/search?q=${encodeURIComponent(query)}&num=50`,
-      `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50&setlang=en`,
-      `https://search.yahoo.com/search?p=${encodeURIComponent(query)}&n=50`
-    ]
-  };
-
-  const engineUrls = engineConfigs[searchEngine] || engineConfigs.all;
-  
   const headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'User-Agent': USER_AGENT,
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
     'Accept-Encoding': 'gzip, deflate, br',
     'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'none',
-    'Sec-Fetch-User': '?1',
-    'Cache-Control': 'max-age=0',
-    'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-    'sec-ch-ua-mobile': '?0',
-    'sec-ch-ua-platform': '"Windows"'
+    'Cache-Control': 'max-age=0'
   };
 
-  for (const url of engineUrls) {
-    try {
-      const res = await axios.get(url, {
-        headers,
-        timeout: 25000
-      });
+  const engineUrls = {
+    brave: `https://search.brave.com/search?q=${encodeURIComponent(query)}&num=30`,
+    bing: `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=30&setlang=en`
+  };
 
-      if (res.data.length < 2000) {
-        console.log(`Short response, possible block`);
-        continue;
-      }
-
-      const $ = cheerio.load(res.data);
-      
-      $('a').each((i, el) => {
-        const href = $(el).attr('href');
-        if (href) {
-          let cleanUrl = href;
-          if (href.startsWith('/url?')) {
-            const urlParam = new URLSearchParams(href.split('?')[1]);
-            cleanUrl = urlParam.get('url') || href.split('&')[0];
-          }
-          if (cleanUrl.startsWith('//')) cleanUrl = 'https:' + cleanUrl;
-          if (cleanUrl.startsWith('http') && 
-              !cleanUrl.includes('search.brave.com') && 
-              !cleanUrl.includes('bing.com') &&
-              !cleanUrl.includes('yahoo.com') &&
-              !cleanUrl.includes('search.yahoo.com') &&
-              !cleanUrl.includes('google.com') &&
-              !cleanUrl.includes('facebook') &&
-              !cleanUrl.includes('youtube') &&
-              !cleanUrl.endsWith('.pdf')) {
-            try {
-              const parsed = new URL(cleanUrl);
-              if (parsed.hostname && !parsed.hostname.includes('search')) {
-                urls.add(cleanUrl.split('&')[0].split('?')[0]);
-              }
-            } catch {}
-          }
-        }
-      });
-      
-      console.log(`Found ${urls.size} URLs from ${url.split('/')[2]}`);
-      if (urls.size >= 10) break;
-    } catch (e) {
-      console.log(`Error: ${e.message}`);
-    }
-  }
+  const urlToTry = engineUrls[searchEngine] || engineUrls.brave;
   
-  return Array.from(urls).filter(url => 
-    url && url.startsWith('http') && 
-    !url.includes('duckduckgo') && !url.includes('youtube') &&
-    !url.includes('facebook') && !url.includes('linkedin') &&
-    !url.includes('twitter') && !url.endsWith('.pdf') &&
-    !url.includes('amazon') && !url.includes('ebay')
-  );
+  try {
+    const res = await axios.get(urlToTry, { headers, timeout: 20000 });
+    
+    if (res.data.length < 2000) return Array.from(urls);
+    
+    const $ = cheerio.load(res.data);
+    
+    $('a').each((i, el) => {
+      const href = $(el).attr('href');
+      if (!href) return;
+      
+      let cleanUrl = href;
+      if (href.includes('/url?')) {
+        try {
+          const params = new URLSearchParams(href.split('?')[1]);
+          cleanUrl = params.get('url') || cleanUrl;
+        } catch {}
+      }
+      
+      if (cleanUrl.startsWith('//')) cleanUrl = 'https:' + cleanUrl;
+      if (!cleanUrl.startsWith('http')) return;
+      
+      const domain = extractDomain(cleanUrl);
+      if (domain && isValidDomain(domain)) {
+        urls.add(cleanUrl.split('&')[0].split('?')[0]);
+      }
+    });
+  } catch (e) {
+    console.log(`Search error: ${e.message}`);
+  }
+
+  return Array.from(urls).slice(0, 50);
 }
 
-function extractInfo(html, baseUrl) {
+function extractInfo(html) {
   const $ = cheerio.load(html);
   const text = $('body').text();
-
+  
   const emails = text.match(EMAIL_REGEX) || [];
-  const email = emails.find(e => !e.includes('example') && !e.includes('test')) || '';
-
+  const validEmail = emails.find(e => isValidEmail(e)) || '';
+  
   const phones = text.match(PHONE_REGEX) || [];
-  const phone = phones.find(p => p.replace(/\D/g, '').length >= 8) || '';
-
+  const validPhone = phones.find(p => isValidPhone(p)) || '';
+  
   let company = '';
-  const ogTitle = $('meta[property="og:site_name"]').attr('content') || '';
-  const title = $('title').text() || '';
-  const h1 = $('h1').first().text() || '';
-
-  const candidates = [ogTitle, title, h1].filter(Boolean);
-  for (const c of candidates) {
-    const cleaned = c.split('|')[0].split('-')[0].split('—')[0].trim();
-    if (cleaned.length > 2 && cleaned.length < 80 && !cleaned.toLowerCase().includes('contact')) {
-      company = cleaned;
+  const title = $('title').text().split('|')[0].split('-')[0].trim();
+  const ogSite = $('meta[property="og:site_name"]').attr('content');
+  const h1 = $('h1').first().text().split('|')[0].split('-')[0].trim();
+  
+  for (const text of [ogSite, title, h1]) {
+    if (text && text.length > 2 && text.length < 60) {
+      company = text;
       break;
     }
   }
-
-  return { company, email, phone };
+  
+  return { company, email: validEmail, phone: validPhone };
 }
 
 async function visitWebsite(baseUrl) {
-  const result = { company: '', website: baseUrl, email: '', phone: '' };
-
+  let result = { company: '', website: baseUrl, email: '', phone: '' };
+  
   for (const path of CONTACT_PATHS) {
+    if (result.email && result.phone && result.company) break;
+    
     const url = baseUrl.replace(/\/$/, '') + path;
-
     try {
       const res = await axios.get(url, {
         headers: { 'User-Agent': USER_AGENT },
-        timeout: 10000,
-        maxRedirects: 3
+        timeout: 8000,
+        maxRedirects: 3,
+        validateStatus: (status) => status < 500
       });
-
-      const info = extractInfo(res.data, url);
-
-      if (!result.email && info.email) result.email = info.email;
-      if (!result.phone && info.phone) result.phone = info.phone;
-      if (!result.company && info.company) result.company = info.company;
-
-      if (result.email && result.phone && result.company) break;
-    } catch (e) {
+      
+      if (res.status === 200 && res.data.length > 100) {
+        const info = extractInfo(res.data);
+        
+        if (!result.email && info.email) result.email = info.email;
+        if (!result.phone && info.phone) result.phone = info.phone;
+        if (!result.company && info.company) result.company = info.company;
+      }
+    } catch {
       continue;
     }
   }
-
+  
   return result;
 }
 
@@ -245,15 +287,14 @@ app.post('/generate-leads', async (req, res) => {
   const queries = suffixes.map(suffix => `${product} ${country} ${suffix}`);
 
   try {
-    console.log(`Searching: ${product} ${country} (${searchEngine})...`);
+    console.log(`Searching: ${product} ${country}`);
 
     const allUrls = new Set();
     for (const query of queries) {
-      const urls = await searchGoogle(query, searchEngine);
+      const urls = await searchBusiness(query, searchEngine);
       urls.forEach(url => allUrls.add(url));
-      await delay(1500);
-
-      if (allUrls.size >= numLeads * 3) break;
+      await delay(2000);
+      if (allUrls.size >= numLeads * 4) break;
     }
 
     console.log(`Found ${allUrls.size} URLs`);
@@ -266,11 +307,18 @@ app.post('/generate-leads', async (req, res) => {
 
       const domain = extractDomain(url);
       if (visitedDomains.has(domain)) continue;
+      if (!isValidDomain(domain)) continue;
+      
       visitedDomains.add(domain);
-
-      console.log(`Visiting: ${url}`);
+      console.log(`Checking: ${domain}`);
 
       try {
+        const isValid = await checkWebsite(url);
+        if (!isValid) {
+          console.log(`Invalid: ${domain}`);
+          continue;
+        }
+
         const info = await visitWebsite(url);
 
         if (info.email || info.phone) {
@@ -282,12 +330,13 @@ app.post('/generate-leads', async (req, res) => {
             Country: country,
             Product: product
           });
+          console.log(`Lead: ${domain} - Email: ${!!info.email}, Phone: ${!!info.phone}`);
         }
       } catch (e) {
-        console.log(`Error: ${e.message}`);
+        console.log(`Error: ${domain} - ${e.message}`);
       }
 
-      await delay(1000);
+      await delay(1500);
     }
 
     const uniqueLeads = dedupeLeads(leads);
