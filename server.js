@@ -2,14 +2,13 @@ const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const XLSX = require('xlsx');
-const dns = require('dns').promises;
 
 const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
-const SEARCH_SUFFIXES = ['importer', 'distributor', 'wholesale', 'trader', 'supplier'];
-const CONTACT_PATHS = ['/contact', '/contact-us', '/about-us', '/about', '/company', '/'];
+const SEARCH_SUFFIXES = ['importer', 'distributor', 'wholesale', 'trader', 'supplier', 'buyer'];
+const CONTACT_PATHS = ['/contact', '/contact-us', '/about-us', '/about', '/company', '/', '/en/contact', '/contact.html', '/contact-us.html', '/about.html'];
 
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 const PHONE_REGEX = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{2,4}[-.\s]?\d{2,4}/g;
@@ -24,11 +23,8 @@ const DISPOSABLE_DOMAINS = [
 
 const BLOCKED_DOMAINS = [
   'google', 'facebook', 'youtube', 'twitter', 'linkedin', 'instagram',
-  'amazon', 'ebay', 'alibaba', 'alibaba.com', 'made-in-china',
-  'indiamart', 'tradeindia', 'exportersindia', 'tradekey',
-  'bing', 'yahoo', 'duckduckgo', 'yelp', 'yellowpages',
-  'pinterest', 'reddit', 'wikipedia', 'wordpress', 'blogspot',
-  'gov', 'edu', 'org', 'co.in', 'co.uk'
+  'amazon', 'ebay', 'bing', 'yahoo', 'duckduckgo', 'yelp', 'yellowpages',
+  'pinterest', 'reddit', 'wikipedia', 'wordpress', 'blogspot'
 ];
 
 function delay(ms) {
@@ -54,7 +50,7 @@ function isValidEmail(email) {
   if (!email) return false;
   const cleaned = email.toLowerCase().trim();
   
-  const emailRegex = /^[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(cleaned)) return false;
   
   const parts = cleaned.split('@');
@@ -62,11 +58,7 @@ function isValidEmail(email) {
   
   const domain = parts[1];
   if (DISPOSABLE_DOMAINS.includes(domain)) return false;
-  if (domain.includes('example') || domain.includes('test') || domain.includes('localhost')) return false;
-  if (domain.length < 4) return false;
-  
-  const invalidPatterns = ['admin', 'support', 'noreply', 'no-reply', 'webmaster', 'postmaster'];
-  if (invalidPatterns.some(p => cleaned.startsWith(p + '@'))) return false;
+  if (domain.includes('example.com') || domain.includes('test.com')) return false;
   
   return true;
 }
@@ -75,12 +67,10 @@ function isValidPhone(phone) {
   if (!phone) return false;
   
   const digits = phone.replace(/\D/g, '');
-  if (digits.length < 8 || digits.length > 12) return false;
+  if (digits.length < 6 || digits.length > 15) return false;
   
-  const invalidPatterns = ['000000', '111111', '222222', '333333', '444444', '555555', '666666', '777777', '888888', '999999', '123456', '987654'];
-  if (invalidPatterns.some(p => digits.includes(p))) return false;
-  
-  if (digits.match(/^(\d)\1{5,}$/)) return false;
+  const invalidPatterns = ['0000000000', '1111111111', '1234567890', '9876543210'];
+  if (invalidPatterns.includes(digits)) return false;
   
   return true;
 }
@@ -119,32 +109,6 @@ function cleanUrl(url) {
   }
 }
 
-async function validateUrl(url) {
-  const domain = extractDomain(url);
-  if (!domain || !isValidDomain(domain)) return false;
-  
-  try {
-    await dns.lookup(domain.replace('www.', ''));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function checkWebsite(url) {
-  try {
-    const res = await axios.get(url, {
-      headers: { 'User-Agent': USER_AGENT },
-      timeout: 8000,
-      maxRedirects: 3,
-      validateStatus: (status) => status < 500
-    });
-    return res.status === 200;
-  } catch {
-    return false;
-  }
-}
-
 function dedupeLeads(leads) {
   const seen = new Set();
   return leads.filter(lead => {
@@ -164,7 +128,7 @@ function cleanLeads(leads) {
     Country: lead.Country,
     Product: lead.Product
   })).filter(lead => 
-    lead.Website && (lead.Email || lead.Phone)
+    lead.Website
   );
 }
 
@@ -313,12 +277,6 @@ app.post('/generate-leads', async (req, res) => {
       console.log(`Checking: ${domain}`);
 
       try {
-        const isValid = await checkWebsite(url);
-        if (!isValid) {
-          console.log(`Invalid: ${domain}`);
-          continue;
-        }
-
         const info = await visitWebsite(url);
 
         if (info.email || info.phone) {
