@@ -6,61 +6,194 @@
   <title>Lead Generator</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f0f0; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
-    .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 100%; max-width: 450px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f0f0; padding: 20px; }
+    .container { max-width: 700px; margin: 0 auto; }
+    .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
     h1 { margin-bottom: 25px; text-align: center; color: #333; font-size: 24px; }
+    h2 { color: #333; font-size: 18px; margin-bottom: 15px; }
     .form-group { margin-bottom: 15px; }
     label { display: block; margin-bottom: 5px; color: #555; font-size: 14px; font-weight: 500; }
-    input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
-    input:focus { outline: none; border-color: #007bff; }
-    button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; font-size: 15px; cursor: pointer; font-weight: 500; }
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    input:focus, select:focus { outline: none; border-color: #007bff; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    button { width: 100%; padding: 14px; background: #007bff; color: white; border: none; border-radius: 4px; font-size: 15px; cursor: pointer; font-weight: 500; }
     button:hover { background: #0056b3; }
     button:disabled { background: #999; cursor: not-allowed; }
     #status { margin-top: 15px; text-align: center; color: #666; font-size: 13px; min-height: 20px; }
-    .example { font-size: 12px; color: #888; margin-top: 3px; }
+    .guide { background: #f8f9fa; padding: 20px; border-radius: 8px; }
+    .guide-section { margin-bottom: 20px; }
+    .guide-section:last-child { margin-bottom: 0; }
+    .guide-section h3 { font-size: 15px; color: #333; margin-bottom: 10px; }
+    .guide-list { list-style: none; }
+    .guide-list li { padding: 6px 0; font-size: 13px; color: #555; }
+    .guide-list li strong { color: #007bff; }
+    .example-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px; }
+    .tag { background: #e9ecef; padding: 4px 10px; border-radius: 4px; font-size: 12px; color: #495057; cursor: pointer; }
+    .tag:hover { background: #dee2e6; }
+    @media (max-width: 500px) { .row { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Lead Generator</h1>
-    <div class="form-group">
-      <label>Product Keyword</label>
-      <input type="text" id="product" placeholder="e.g., dry fruit, spice, marble">
-      <div class="example">Examples: dry fruit, spices, marble handicrafts</div>
+    <div class="card">
+      <h1>Lead Generator</h1>
+      <div class="form-group">
+        <label>Product Category *</label>
+        <select id="productCategory">
+          <option value="">Select a category</option>
+          <option value="dry_fruit">Dry Fruits</option>
+          <option value="spices">Spices</option>
+          <option value="marble">Marble & Handicrafts</option>
+          <option value="textiles">Textiles & Fabrics</option>
+          <option value="food">Food & Beverages</option>
+          <option value="electronics">Electronics</option>
+          <option value="custom">Custom / Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Custom Product Keyword</label>
+        <input type="text" id="product" placeholder="e.g., almond, cumin, marble statue">
+        <div class="example-tags">
+          <span class="tag" onclick="setProduct('almond')">almond</span>
+          <span class="tag" onclick="setProduct('cashew nut')">cashew nut</span>
+          <span class="tag" onclick="setProduct('raisin')">raisin</span>
+          <span class="tag" onclick="setProduct('walnut')">walnut</span>
+          <span class="tag" onclick="setProduct('black pepper')">black pepper</span>
+          <span class="tag" onclick="setProduct('cumin')">cumin</span>
+          <span class="tag" onclick="setProduct('cardamom')">cardamom</span>
+          <span class="tag" onclick="setProduct('turmeric')">turmeric</span>
+          <span class="tag" onclick="setProduct('marble statue')">marble statue</span>
+          <span class="tag" onclick="setProduct('handicraft')">handicraft</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="form-group">
+          <label>Target Country *</label>
+          <input type="text" id="country" placeholder="e.g., USA, UAE, UK">
+          <div class="example-tags">
+            <span class="tag" onclick="setCountry('USA')">USA</span>
+            <span class="tag" onclick="setCountry('UAE')">UAE</span>
+            <span class="tag" onclick="setCountry('UK')">UK</span>
+            <span class="tag" onclick="setCountry('India')">India</span>
+            <span class="tag" onclick="setCountry('China')">China</span>
+            <span class="tag" onclick="setCountry('Germany')">Germany</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Company Type</label>
+          <select id="companyType">
+            <option value="importer">Importer</option>
+            <option value="distributor">Distributor</option>
+            <option value="wholesaler">Wholesaler</option>
+            <option value="trader">Trader</option>
+            <option value="supplier">Supplier</option>
+            <option value="manufacturer">Manufacturer</option>
+            <option value="all">All Types</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="form-group">
+          <label>Number of Leads</label>
+          <input type="number" id="numLeads" value="50" min="5" max="100">
+        </div>
+        <div class="form-group">
+          <label>Search Engine</label>
+          <select id="searchEngine">
+            <option value="brave">Brave Search</option>
+            <option value="bing">Bing</option>
+            <option value="both">Both</option>
+          </select>
+        </div>
+      </div>
+      <button onclick="generateLeads()" id="btn">Generate Leads</button>
+      <p id="status"></p>
     </div>
-    <div class="form-group">
-      <label>Country</label>
-      <input type="text" id="country" placeholder="e.g., USA, UAE, India">
+
+    <div class="card guide">
+      <h2>Input Guide</h2>
+      
+      <div class="guide-section">
+        <h3>Product Keywords</h3>
+        <ul class="guide-list">
+          <li><strong>Dry Fruits:</strong> almond, cashew nut, walnut, raisin, dates, pistachio, dried apricot, fig, pecan</li>
+          <li><strong>Spices:</strong> black pepper, cumin, cardamom, turmeric, cinnamon, cloves, ginger, chili, coriander</li>
+          <li><strong>Marble & Handicrafts:</strong> marble statue, marble tile, handicraft, pottery, ceramic, stone carving</li>
+          <li><strong>Textiles:</strong> cotton fabric, silk, linen, wool, synthetic fabric, garment</li>
+          <li><strong>Food Products:</strong> rice, wheat, sugar, olive oil, honey, tea, coffee</li>
+        </ul>
+      </div>
+
+      <div class="guide-section">
+        <h3>Countries</h3>
+        <ul class="guide-list">
+          <li><strong>Middle East:</strong> UAE, Saudi Arabia, Qatar, Kuwait, Oman, Bahrain, Iran, Turkey</li>
+          <li><strong>Europe:</strong> UK, Germany, France, Italy, Spain, Netherlands, Poland</li>
+          <li><strong>Asia:</strong> India, China, Japan, South Korea, Thailand, Vietnam, Indonesia</li>
+          <li><strong>Americas:</strong> USA, Canada, Brazil, Mexico, Argentina</li>
+          <li><strong>Africa:</strong> South Africa, Egypt, Nigeria, Kenya, Morocco</li>
+        </ul>
+      </div>
+
+      <div class="guide-section">
+        <h3>Company Types</h3>
+        <ul class="guide-list">
+          <li><strong>Importer:</strong> Brings goods into the country for sale</li>
+          <li><strong>Distributor:</strong> Supplies products to retailers or other businesses</li>
+          <li><strong>Wholesaler:</strong> Sells in bulk to retailers (not consumers)</li>
+          <li><strong>Trader:</strong> Buys and sells goods internationally</li>
+          <li><strong>Supplier:</strong> Provides goods or raw materials to businesses</li>
+          <li><strong>Manufacturer:</strong> Produces goods from raw materials</li>
+        </ul>
+      </div>
+
+      <div class="guide-section">
+        <h3>Example Searches</h3>
+        <ul class="guide-list">
+          <li>dry fruit importer USA</li>
+          <li>spices distributor UAE</li>
+          <li>marble handicraft wholesaler UK</li>
+          <li>cashew nut supplier India</li>
+          <li>black pepper importer Germany</li>
+          <li>textiles trader China</li>
+        </ul>
+      </div>
     </div>
-    <div class="form-group">
-      <label>Number of Leads</label>
-      <input type="number" id="numLeads" value="50" min="5" max="100">
-    </div>
-    <button onclick="generateLeads()" id="btn">Generate Leads</button>
-    <p id="status"></p>
   </div>
 
   <script>
+    function setProduct(val) {
+      document.getElementById('product').value = val;
+    }
+    
+    function setCountry(val) {
+      document.getElementById('country').value = val;
+    }
+
     async function generateLeads() {
-      const product = document.getElementById('product').value.trim();
+      const productCategory = document.getElementById('productCategory').value;
+      const productCustom = document.getElementById('product').value.trim();
+      const product = productCustom || getCategoryProduct(productCategory);
       const country = document.getElementById('country').value.trim();
+      const companyType = document.getElementById('companyType').value;
       const numLeads = parseInt(document.getElementById('numLeads').value);
+      const searchEngine = document.getElementById('searchEngine').value;
       const btn = document.getElementById('btn');
       const status = document.getElementById('status');
       
       if (!product || !country) {
-        alert('Please fill in product and country');
+        alert('Please enter a product keyword and country');
         return;
       }
       
       btn.disabled = true;
-      status.textContent = 'Searching Google...';
+      status.textContent = 'Searching for companies...';
       
       try {
         const response = await fetch('/generate-leads', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ product, country, numLeads })
+          body: JSON.stringify({ product, country, companyType, numLeads, searchEngine })
         });
         
         if (!response.ok) {
@@ -85,6 +218,18 @@
       
       btn.disabled = false;
       setTimeout(() => status.textContent = '', 5000);
+    }
+
+    function getCategoryProduct(category) {
+      const map = {
+        'dry_fruit': 'dry fruit',
+        'spices': 'spices',
+        'marble': 'marble handicraft',
+        'textiles': 'textiles',
+        'food': 'food products',
+        'electronics': 'electronics'
+      };
+      return map[category] || '';
     }
   </script>
 </body>

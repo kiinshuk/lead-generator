@@ -88,17 +88,23 @@ function cleanLeads(leads) {
   );
 }
 
-async function searchGoogle(query) {
+async function searchGoogle(query, searchEngine = 'both') {
   const urls = new Set();
   
-  const searchEngines = [
-    { url: `https://search.brave.com/search?q=${encodeURIComponent(query)}` },
-    { url: `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50` },
-  ];
+  const engineConfigs = {
+    brave: [`https://search.brave.com/search?q=${encodeURIComponent(query)}`],
+    bing: [`https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50`],
+    both: [
+      `https://search.brave.com/search?q=${encodeURIComponent(query)}`,
+      `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50`
+    ]
+  };
 
-  for (const engine of searchEngines) {
+  const engineUrls = engineConfigs[searchEngine] || engineConfigs.both;
+
+  for (const url of engineUrls) {
     try {
-      const res = await axios.get(engine.url, {
+      const res = await axios.get(url, {
         headers: { 
           'User-Agent': USER_AGENT,
           'Accept': 'text/html,application/xhtml+xml',
@@ -188,20 +194,21 @@ async function visitWebsite(baseUrl) {
 }
 
 app.post('/generate-leads', async (req, res) => {
-  const { product, country, numLeads } = req.body;
+  const { product, country, companyType, numLeads, searchEngine } = req.body;
 
   if (!product || !country) {
     return res.status(400).json({ error: 'Product and country are required' });
   }
 
-  try {
-    const queries = SEARCH_SUFFIXES.map(suffix => `${product} ${country} ${suffix}`);
+  const suffixes = companyType && companyType !== 'all' ? [companyType] : SEARCH_SUFFIXES;
+  const queries = suffixes.map(suffix => `${product} ${country} ${suffix}`);
 
+  try {
     console.log(`Searching with ${queries.length} queries...`);
 
     const allUrls = new Set();
     for (const query of queries) {
-      const urls = await searchGoogle(query);
+      const urls = await searchGoogle(query, searchEngine);
       urls.forEach(url => allUrls.add(url));
       await delay(1500);
 
