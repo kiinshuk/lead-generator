@@ -92,6 +92,7 @@ async function searchGoogle(query, searchEngine = 'all') {
   const urls = new Set();
   
   const engineConfigs = {
+    google: [`https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en`],
     brave: [`https://search.brave.com/search?q=${encodeURIComponent(query)}`],
     bing: [`https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50`],
     yahoo: [`https://search.yahoo.com/search?p=${encodeURIComponent(query)}`],
@@ -99,6 +100,7 @@ async function searchGoogle(query, searchEngine = 'all') {
     startpage: [`https://www.startpage.com/do/search?q=${encodeURIComponent(query)}`],
     duckduckgo: [`https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`],
     all: [
+      `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en`,
       `https://search.brave.com/search?q=${encodeURIComponent(query)}`,
       `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50`,
       `https://search.yahoo.com/search?p=${encodeURIComponent(query)}`,
