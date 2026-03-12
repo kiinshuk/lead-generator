@@ -88,19 +88,26 @@ function cleanLeads(leads) {
   );
 }
 
-async function searchGoogle(query, searchEngine = 'both') {
+async function searchGoogle(query, searchEngine = 'all') {
   const urls = new Set();
   
   const engineConfigs = {
     brave: [`https://search.brave.com/search?q=${encodeURIComponent(query)}`],
     bing: [`https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50`],
-    both: [
+    yahoo: [`https://search.yahoo.com/search?p=${encodeURIComponent(query)}`],
+    qwant: [`https://www.qwant.com/?q=${encodeURIComponent(query)}`],
+    startpage: [`https://www.startpage.com/do/search?q=${encodeURIComponent(query)}`],
+    duckduckgo: [`https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`],
+    all: [
       `https://search.brave.com/search?q=${encodeURIComponent(query)}`,
-      `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50`
+      `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50`,
+      `https://search.yahoo.com/search?p=${encodeURIComponent(query)}`,
+      `https://www.qwant.com/?q=${encodeURIComponent(query)}`,
+      `https://www.startpage.com/do/search?q=${encodeURIComponent(query)}`
     ]
   };
 
-  const engineUrls = engineConfigs[searchEngine] || engineConfigs.both;
+  const engineUrls = engineConfigs[searchEngine] || engineConfigs.all;
 
   for (const url of engineUrls) {
     try {
