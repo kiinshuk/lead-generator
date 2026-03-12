@@ -268,9 +268,11 @@ app.post('/generate-leads', async (req, res) => {
 
     const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
 
+    const filename = `leads_${product.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${country.toLowerCase().replace(/[^a-z0-9]/g, '_')}.xlsx`;
+    
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=leads_${product.toLowerCase().replace(/\s+/g, '_')}_${country.toLowerCase()}.xlsx`);
-    res.send(buffer);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(buffer);
 
   } catch (e) {
     console.error('Error:', e);
