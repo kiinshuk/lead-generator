@@ -92,49 +92,81 @@ async function searchGoogle(query, searchEngine = 'all') {
   const urls = new Set();
   
   const engineConfigs = {
-    google: [`https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en`],
-    brave: [`https://search.brave.com/search?q=${encodeURIComponent(query)}`],
-    bing: [`https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50`],
-    yahoo: [`https://search.yahoo.com/search?p=${encodeURIComponent(query)}`],
-    qwant: [`https://www.qwant.com/?q=${encodeURIComponent(query)}`],
-    startpage: [`https://www.startpage.com/do/search?q=${encodeURIComponent(query)}`],
-    duckduckgo: [`https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`],
+    brave: [`https://search.brave.com/search?q=${encodeURIComponent(query)}&num=50`],
+    bing: [`https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50&setlang=en`],
+    yahoo: [`https://search.yahoo.com/search?p=${encodeURIComponent(query)}&n=50`],
     all: [
-      `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en`,
-      `https://search.brave.com/search?q=${encodeURIComponent(query)}`,
-      `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50`,
-      `https://search.yahoo.com/search?p=${encodeURIComponent(query)}`,
-      `https://www.qwant.com/?q=${encodeURIComponent(query)}`,
-      `https://www.startpage.com/do/search?q=${encodeURIComponent(query)}`
+      `https://search.brave.com/search?q=${encodeURIComponent(query)}&num=50`,
+      `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50&setlang=en`,
+      `https://search.yahoo.com/search?p=${encodeURIComponent(query)}&n=50`
     ]
   };
 
   const engineUrls = engineConfigs[searchEngine] || engineConfigs.all;
+  
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+    'Cache-Control': 'max-age=0',
+    'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"'
+  };
 
   for (const url of engineUrls) {
     try {
       const res = await axios.get(url, {
-        headers: { 
-          'User-Agent': USER_AGENT,
-          'Accept': 'text/html,application/xhtml+xml',
-          'Accept-Language': 'en-US,en;q=0.9'
-        },
-        timeout: 15000
+        headers,
+        timeout: 25000
       });
+
+      if (res.data.length < 2000) {
+        console.log(`Short response, possible block`);
+        continue;
+      }
 
       const $ = cheerio.load(res.data);
       
       $('a').each((i, el) => {
         const href = $(el).attr('href');
-        if (href && (href.startsWith('http') || href.startsWith('//'))) {
-          if (href.startsWith('//')) href = 'https:' + href;
-          urls.add(href);
+        if (href) {
+          let cleanUrl = href;
+          if (href.startsWith('/url?')) {
+            const urlParam = new URLSearchParams(href.split('?')[1]);
+            cleanUrl = urlParam.get('url') || href.split('&')[0];
+          }
+          if (cleanUrl.startsWith('//')) cleanUrl = 'https:' + cleanUrl;
+          if (cleanUrl.startsWith('http') && 
+              !cleanUrl.includes('search.brave.com') && 
+              !cleanUrl.includes('bing.com') &&
+              !cleanUrl.includes('yahoo.com') &&
+              !cleanUrl.includes('search.yahoo.com') &&
+              !cleanUrl.includes('google.com') &&
+              !cleanUrl.includes('facebook') &&
+              !cleanUrl.includes('youtube') &&
+              !cleanUrl.endsWith('.pdf')) {
+            try {
+              const parsed = new URL(cleanUrl);
+              if (parsed.hostname && !parsed.hostname.includes('search')) {
+                urls.add(cleanUrl.split('&')[0].split('?')[0]);
+              }
+            } catch {}
+          }
         }
       });
       
-      if (urls.size > 0) break;
+      console.log(`Found ${urls.size} URLs from ${url.split('/')[2]}`);
+      if (urls.size >= 10) break;
     } catch (e) {
-      console.log('Search error:', e.message);
+      console.log(`Error: ${e.message}`);
     }
   }
   
@@ -213,7 +245,7 @@ app.post('/generate-leads', async (req, res) => {
   const queries = suffixes.map(suffix => `${product} ${country} ${suffix}`);
 
   try {
-    console.log(`Searching with ${queries.length} queries...`);
+    console.log(`Searching: ${product} ${country} (${searchEngine})...`);
 
     const allUrls = new Set();
     for (const query of queries) {
@@ -224,7 +256,7 @@ app.post('/generate-leads', async (req, res) => {
       if (allUrls.size >= numLeads * 3) break;
     }
 
-    console.log(`Found ${allUrls.size} unique URLs`);
+    console.log(`Found ${allUrls.size} URLs`);
 
     const leads = [];
     const visitedDomains = new Set();
