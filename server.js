@@ -38,6 +38,56 @@ function dedupeLeads(leads) {
   });
 }
 
+function cleanEmail(email) {
+  if (!email) return '';
+  const cleaned = email.toLowerCase().trim();
+  const invalidDomains = ['example.com', 'test.com', 'localhost', 'domain.com', 'sample.com'];
+  if (invalidDomains.some(d => cleaned.includes(d))) return '';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned)) return '';
+  return cleaned;
+}
+
+function cleanPhone(phone) {
+  if (!phone) return '';
+  const cleaned = phone.replace(/[^\d+]/g, '');
+  if (cleaned.length < 8 || cleaned.length > 15) return '';
+  const invalidPatterns = ['000000', '111111', '123456', '999999'];
+  if (invalidPatterns.some(p => cleaned.includes(p))) return '';
+  return phone.trim();
+}
+
+function cleanCompany(company) {
+  if (!company) return '';
+  return company
+    .replace(/[^\w\s&'-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 100);
+}
+
+function cleanUrl(url) {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    return parsed.href.replace(/\/$/, '');
+  } catch {
+    return url;
+  }
+}
+
+function cleanLeads(leads) {
+  return leads.map(lead => ({
+    Company: cleanCompany(lead.Company) || extractDomain(lead.Website),
+    Website: cleanUrl(lead.Website),
+    Email: cleanEmail(lead.Email),
+    Phone: cleanPhone(lead.Phone),
+    Country: lead.Country,
+    Product: lead.Product
+  })).filter(lead => 
+    (lead.Email || lead.Phone) && lead.Website
+  );
+}
+
 async function searchGoogle(query) {
   const urls = new Set();
   
@@ -193,9 +243,10 @@ app.post('/generate-leads', async (req, res) => {
     }
 
     const uniqueLeads = dedupeLeads(leads);
-    console.log(`Final leads: ${uniqueLeads.length}`);
+    const cleanData = cleanLeads(uniqueLeads);
+    console.log(`Final leads: ${cleanData.length}`);
 
-    const worksheet = XLSX.utils.json_to_sheet(uniqueLeads);
+    const worksheet = XLSX.utils.json_to_sheet(cleanData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Leads');
 
