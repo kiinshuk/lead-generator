@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lead Generator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f0f0; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
+    .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 100%; max-width: 450px; }
+    h1 { margin-bottom: 25px; text-align: center; color: #333; font-size: 24px; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; color: #555; font-size: 14px; font-weight: 500; }
+    input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    input:focus { outline: none; border-color: #007bff; }
+    button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; font-size: 15px; cursor: pointer; font-weight: 500; }
+    button:hover { background: #0056b3; }
+    button:disabled { background: #999; cursor: not-allowed; }
+    #status { margin-top: 15px; text-align: center; color: #666; font-size: 13px; min-height: 20px; }
+    .example { font-size: 12px; color: #888; margin-top: 3px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Lead Generator</h1>
+    <div class="form-group">
+      <label>Product Keyword</label>
+      <input type="text" id="product" placeholder="e.g., dry fruit, spice, marble">
+      <div class="example">Examples: dry fruit, spices, marble handicrafts</div>
+    </div>
+    <div class="form-group">
+      <label>Country</label>
+      <input type="text" id="country" placeholder="e.g., USA, UAE, India">
+    </div>
+    <div class="form-group">
+      <label>Number of Leads</label>
+      <input type="number" id="numLeads" value="50" min="5" max="100">
+    </div>
+    <button onclick="generateLeads()" id="btn">Generate Leads</button>
+    <p id="status"></p>
+  </div>
+
+  <script>
+    async function generateLeads() {
+      const product = document.getElementById('product').value.trim();
+      const country = document.getElementById('country').value.trim();
+      const numLeads = parseInt(document.getElementById('numLeads').value);
+      const btn = document.getElementById('btn');
+      const status = document.getElementById('status');
+      
+      if (!product || !country) {
+        alert('Please fill in product and country');
+        return;
+      }
+      
+      btn.disabled = true;
+      status.textContent = 'Searching Google...';
+      
+      try {
+        const response = await fetch('/generate-leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product, country, numLeads })
+        });
+        
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || 'Failed');
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `leads_${product.toLowerCase().replace(/\s+/g, '_')}_${country.toLowerCase()}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+        
+        status.textContent = 'Download complete!';
+      } catch (e) {
+        status.textContent = 'Error: ' + e.message;
+      }
+      
+      btn.disabled = false;
+      setTimeout(() => status.textContent = '', 5000);
+    }
+  </script>
+</body>
+</html>
